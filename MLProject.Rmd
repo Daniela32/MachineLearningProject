@@ -1,0 +1,122 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+##Project: Machine Learning
+by Daniela Galatro, March 2019
+
+###Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+###Objective
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+###Libraries
+```{r, echo = TRUE}
+library(gbm)
+library(caret)
+library(rattle)
+library(randomForest)
+library(rpart.plot)
+```
+
+###Exploratory Data Analysis and Data Preparation
+
+####Getting the data
+The training data for this project are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+```{r, echo = TRUE}
+train_in <- read.csv('./pml-training.csv', header=T)
+valid_in <- read.csv('./pml-testing.csv', header=T)
+dim(train_in)
+dim(valid_in)
+```
+####Cleaning the data
+```{r, echo = TRUE}
+trainData<- train_in[, colSums(is.na(train_in)) == 0]
+validData <- valid_in[, colSums(is.na(valid_in)) == 0]
+dim(trainData)
+dim(validData)
+```
+Removing first seven variables 
+```{r, echo = TRUE}
+trainData <- trainData[, -c(1:7)]
+validData <- validData[, -c(1:7)]
+dim(trainData)
+dim(validData)
+```
+####Data preparation for prediction
+```{r, echo = TRUE}
+set.seed(1234) 
+inTrain <- createDataPartition(trainData$classe, p = 0.7, list = FALSE)
+trainData <- trainData[inTrain, ]
+testData <- trainData[-inTrain, ]
+#Further cleaning by removing variables with near-zero variance
+NZV <- nearZeroVar(trainData)
+trainData <- trainData[, -NZV]
+testData  <- testData[, -NZV]
+dim(trainData)
+dim(testData)
+```
+###Model Building
+#####Classification trees
+```{r, echo = TRUE}
+set.seed(12345)
+decisionTreeMod1 <- rpart(classe ~ ., data=trainData, method="class")
+fancyRpartPlot(decisionTreeMod1)
+```
+
+Prediction and confusion matrix:
+```{r, echo = TRUE}
+prediction1 <-predict(decisionTreeMod1, testData, type = "class")
+summary(prediction1)
+confMatrix <- confusionMatrix(prediction1, testData$classe)
+confMatrix
+```
+
+Plot:
+```{r, echo = TRUE}
+plot(confMatrix$table, col = confMatrix$byClass, main = paste("Confusion Matrix: Accuracy =", round(confMatrix$overall['Accuracy'], 4)))
+```
+
+#####Random Forest
+```{r, echo = TRUE}
+set.seed(10000)
+modelfit2 <- randomForest(classe ~ ., data=trainData)
+prediction2 <- predict(modelfit2, testData, type = "class")
+confMatrix2 <- confusionMatrix(prediction2, testData$classe)
+confMatrix2
+```
+
+Plot:
+```{r, echo = TRUE}
+plot(confMatrix2$table, col = confMatrix2$byClass, main = paste("Confusion Matrix: Accuracy =", round(confMatrix2$overall['Accuracy'], 4)))
+```
+
+
+#####Generalized Boosted Regression
+```{r, echo = TRUE}
+set.seed(10000)
+GBR <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+fitGBR <- train(classe ~ ., data=trainData, method = "gbm", trControl = GBR, verbose = FALSE)
+fitGBR$finalModel
+gbmPred <- predict(fitGBR, newdata=testData)
+confMatrix3 <- confusionMatrix(gbmPred, testData$classe)
+confMatrix3
+```
+
+
+###Predicting results with best model
+The accuracy of previous models allows concluding that ramdon forest is the most accurate model and it is used to predict the test dataset (20 quiz results), as indicated below:
+
+```{r, echo = TRUE}
+predictionFinal <- predict(modelfit2, validData, type = "class")
+predictionFinal
+
+```
